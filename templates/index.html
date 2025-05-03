@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flask Sentiment App</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+            background: linear-gradient(120deg, #e0eafc 0%, #cfdef3 100%);
+            /* SVG geometric pattern overlay for a modern look */
+            background-image:
+                url('data:image/svg+xml;utf8,<svg width="60" height="60" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="60" height="60" fill="white" fill-opacity="0"/><circle cx="30" cy="30" r="28" stroke="%23b6d0e2" stroke-width="2" fill="none"/><circle cx="30" cy="30" r="10" stroke="%23b6d0e2" stroke-width="1.5" fill="none"/><circle cx="30" cy="30" r="20" stroke="%23b6d0e2" stroke-width="1" fill="none"/></svg>'),
+                linear-gradient(120deg, #e0eafc 0%, #cfdef3 100%);
+            background-blend-mode: lighten;
+            background-size: 60px 60px, cover;
+        }
+        .navbar {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+        .card {
+            border-radius: 18px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.10);
+        }
+        .card-header {
+            background: linear-gradient(90deg, #2196f3 60%, #21cbf3 100%);
+            color: #fff;
+            font-weight: 600;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+        }
+        .btn-success {
+            background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+            border: none;
+            font-weight: 500;
+        }
+        .btn-success:hover {
+            background: linear-gradient(90deg, #38f9d7 0%, #43e97b 100%);
+            color: #222;
+        }
+        .footer {
+            background: #2196f3;
+            color: #fff;
+            padding: 18px 0 8px 0;
+            margin-top: 40px;
+            text-align: center;
+            border-top-left-radius: 18px;
+            border-top-right-radius: 18px;
+            box-shadow: 0 -2px 12px rgba(0,0,0,0.10);
+        }
+        .form-control:focus {
+            border-color: #21cbf3;
+            box-shadow: 0 0 0 0.2rem rgba(33,203,243,0.25);
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="#">Flask Sentiment App</a>
+    </div>
+</nav>
+<div class="container mt-4">
+    <!-- Upload CSV Form -->
+    <div class="row mb-4">
+        <div class="col-md-8 offset-md-2">
+            <div class="card">
+                <div class="card-header">Upload File CSV</div>
+                <div class="card-body">
+                    <form action="/upload" method="post" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <input class="form-control" type="file" name="file" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn btn-success">Upload & Proses</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- Grafik Section -->
+    <div class="row mb-4">
+        <div class="col-md-10 offset-md-1">
+            <div class="card">
+                <div class="card-header">Grafik Visualisasi</div>
+                <div class="card-body text-center">
+                    {% if grafik_paths %}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <img src="/results/sentiment_distribution.png" class="img-fluid rounded shadow" alt="Distribusi Sentimen">
+                                <div class="small">Distribusi Sentimen</div>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <img src="/results/comment_activity.png" class="img-fluid rounded shadow" alt="Aktivitas Komentar">
+                                <div class="small">Aktivitas Komentar</div>
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-4 mb-3">
+                                <img src="/results/wordcloud_negatif.png" class="img-fluid rounded shadow" alt="Wordcloud Negatif">
+                                <div class="small">Wordcloud Negatif</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <img src="/results/wordcloud_netral.png" class="img-fluid rounded shadow" alt="Wordcloud Netral">
+                                <div class="small">Wordcloud Netral</div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <img src="/results/wordcloud_positif.png" class="img-fluid rounded shadow" alt="Wordcloud Positif">
+                                <div class="small">Wordcloud Positif</div>
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="text-muted">Belum ada grafik, silakan upload file CSV terlebih dahulu.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Komentar Section (sekarang di bawah wordcloud) -->
+    <div class="row mb-4">
+        <div class="col-md-10 offset-md-1">
+            <div class="card">
+                <div class="card-header">Komentar</div>
+                <div class="card-body">
+                    <form action="/add_comment" method="post" class="mb-3">
+                        <div class="input-group">
+                            <input type="text" name="comment" class="form-control" placeholder="Tulis komentar..." required>
+                            <button class="btn btn-primary" type="submit">Kirim</button>
+                        </div>
+                    </form>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-striped">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Komentar</th>
+                                    <th>Sentimen</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for c in comments %}
+                                <tr>
+                                    <td>{{ c[0] }}</td>
+                                    <td>
+                                        {% if c[1]|lower == 'positif' %}
+                                            <span class="badge bg-success">Positif</span>
+                                        {% elif c[1]|lower == 'negatif' %}
+                                            <span class="badge bg-danger">Negatif</span>
+                                        {% elif c[1]|lower == 'netral' %}
+                                            <span class="badge bg-secondary">Netral</span>
+                                        {% else %}
+                                            <span class="badge bg-light text-dark">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% else %}
+                                <tr><td colspan="2" class="text-center text-muted">Belum ada komentar.</td></tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

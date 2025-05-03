@@ -1,7 +1,7 @@
 flask
-numpy
 pandas
-scikit-learn
-tensorflow
 matplotlib
+seaborn
 wordcloud
+tensorflow
+scikit-learn

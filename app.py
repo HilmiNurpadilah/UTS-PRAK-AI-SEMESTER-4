@@ -52,7 +52,7 @@ def index():
     # Ambil maksimal 15 komentar dari file dataset_tiktok_processed.csv, pastikan ada positif, negatif, netral jika tersedia
     csv_comments = []
     try:
-        df = pd.read_csv('dataset_tiktok_processed.csv')
+        df = pd.read_csv('dataset_tiktok_processed.csv', nrows=50)  # cukup ambil 50 baris awal
         if 'komentar' in df.columns and 'sentiment' in df.columns:
             # Ambil satu contoh positif, negatif, netral jika ada
             positif = df[df['sentiment'].str.lower() == 'positif'].head(1)
@@ -120,5 +120,11 @@ def add_comment():
 def results_file(filename):
     return send_from_directory(RESULTS_FOLDER, filename)
 
+import os
+
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get('PORT', 8080))  # Gunakan PORT dari Railway jika ada
+    app.run(host='0.0.0.0', port=port)
+
+
+

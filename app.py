@@ -125,6 +125,7 @@ import os
 import os
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 8080))  # BUKAN hardcoded 8080!
+    port = int(os.environ.get("PORT", 5000))  # GUNAKAN PORT DARI ENV
     app.run(host='0.0.0.0', port=port)
+
 

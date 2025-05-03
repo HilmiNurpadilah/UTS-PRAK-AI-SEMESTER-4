@@ -1,5 +1,5 @@
 Flask==2.2.5
-Flask-Bootstrap==3.3.7.1
+Flask-Bootstrap==3.3.7.1  # Tidak direkomendasikan, tapi masih bisa dipaksa jalan
 pandas==1.5.3
 numpy==1.23.5
 matplotlib==3.7.1

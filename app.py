@@ -52,7 +52,7 @@ def index():
     # Ambil maksimal 15 komentar dari file dataset_tiktok_processed.csv, pastikan ada positif, negatif, netral jika tersedia
     csv_comments = []
     try:
-        df = pd.read_csv('dataset_tiktok_processed.csv')
+        df = pd.read_csv('dataset_tiktok_processed.csv', nrows=50)  # cukup ambil 50 baris awal
         if 'komentar' in df.columns and 'sentiment' in df.columns:
             # Ambil satu contoh positif, negatif, netral jika ada
             positif = df[df['sentiment'].str.lower() == 'positif'].head(1)

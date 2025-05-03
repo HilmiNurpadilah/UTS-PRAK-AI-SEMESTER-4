@@ -8,6 +8,10 @@ import pickle
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 from tensorflow.keras.models import load_model
 
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
 UPLOAD_FOLDER = 'app/data/uploads'
 RESULTS_FOLDER = 'app/data/results'
 ALLOWED_EXTENSIONS = {'csv'}
@@ -49,28 +53,31 @@ def index():
         'wordcloud_netral': os.path.join(RESULTS_FOLDER, 'wordcloud_netral.png'),
         'wordcloud_positif': os.path.join(RESULTS_FOLDER, 'wordcloud_positif.png'),
     }
-    # Ambil maksimal 15 komentar dari file dataset_tiktok_processed.csv, pastikan ada positif, negatif, netral jika tersedia
+    # Ambil komentar dari session
+    comments = session.get(COMMENTS_KEY, [])
+    # Ambil 20 komentar dari dataset CSV (beragam sentimen)
     csv_comments = []
-    try:
-        df = pd.read_csv('dataset_tiktok_processed.csv', nrows=50)  # cukup ambil 50 baris awal
-        if 'komentar' in df.columns and 'sentiment' in df.columns:
-            # Ambil satu contoh positif, negatif, netral jika ada
-            positif = df[df['sentiment'].str.lower() == 'positif'].head(1)
-            negatif = df[df['sentiment'].str.lower() == 'negatif'].head(1)
-            netral = df[df['sentiment'].str.lower() == 'netral'].head(1)
-            sisa = df.drop(positif.index.union(negatif.index).union(netral.index)).head(12)
-            sample_df = pd.concat([positif, negatif, netral, sisa])
-            csv_comments = sample_df[['komentar', 'sentiment']].values.tolist()
-        elif 'komentar' in df.columns:
-            csv_comments = [[row, '-'] for row in df['komentar'].astype(str).head(15).tolist()]
-    except Exception as e:
-        pass
-    # Ambil komentar baru dari session
-    user_comments = session.get(COMMENTS_KEY, [])
-    # Daftar utama hanya dari dataset_tiktok_processed.csv, komentar user hanya tampil setelah submit
-    comments = csv_comments + user_comments
+    csv_path = os.path.join('dataset_tiktok_processed.csv')
+    if os.path.exists(csv_path):
+        try:
+            df = pd.read_csv(csv_path)
+            if 'komentar' in df.columns and 'sentiment' in df.columns:
+                # Ambil masing-masing sentimen
+                komentar_pos = df[df['sentiment'].str.lower() == 'positif'].sample(n=min(7, len(df[df['sentiment'].str.lower() == 'positif'])), random_state=1)
+                komentar_neg = df[df['sentiment'].str.lower() == 'negatif'].sample(n=min(7, len(df[df['sentiment'].str.lower() == 'negatif'])), random_state=2)
+                komentar_net = df[df['sentiment'].str.lower() == 'netral'].sample(n=min(6, len(df[df['sentiment'].str.lower() == 'netral'])), random_state=3)
+                gabung = pd.concat([komentar_pos, komentar_neg, komentar_net]).sample(frac=1, random_state=42) # acak urutan
+                csv_comments = [(row['komentar'], row['sentiment']) for _, row in gabung.iterrows()]
+            else:
+                # fallback: ambil 20 komentar pertama jika kolom tidak lengkap
+                csv_comments = [(row[0], row[1] if len(row) > 1 else '-') for row in df.values[:20]]
+        except Exception as e:
+            csv_comments = [(f'Gagal membaca CSV: {e}', '-')]
+    # Gabungkan komentar dari CSV lebih dulu, lalu komentar dari session (user) di bawahnya
+    all_comments = csv_comments + comments
     analysis_result = session.pop('analysis_result', None)
-    return render_template('index.html', grafik_paths=grafik_paths, comments=comments, analysis_result=analysis_result)
+    return render_template('index.html', grafik_paths=grafik_paths, comments=all_comments, analysis_result=analysis_result)
+
 
 @app.route('/upload', methods=['POST'])
 def upload():
@@ -104,27 +111,38 @@ def add_comment():
     comment = request.form.get('comment')
     comments = session.get(COMMENTS_KEY, [])
     if comment:
-        # Cek sentimen dengan LSTM jika model tersedia
-        sentiment = '-'
+        # Prediksi sentimen jika model tersedia
+        sentimen = '-'
         if model and tokenizer and label_encoder:
-            seq = tokenizer.texts_to_sequences([comment])
-            padded = pad_sequences(seq, maxlen=100)
-            pred = model.predict(padded)
-            sentiment = label_encoder.inverse_transform([np.argmax(pred)])[0]
-        comments.append([comment, sentiment])
+            try:
+                seq = tokenizer.texts_to_sequences([comment])
+                padded = pad_sequences(seq, maxlen=100)
+                pred = model.predict(padded)
+                sentimen = label_encoder.inverse_transform([np.argmax(pred)])[0]
+            except Exception as e:
+                sentimen = f'error: {e}'
+        comments.append((comment, sentimen))
         session[COMMENTS_KEY] = comments
     return redirect(url_for('index'))
 
+
+@app.route('/analyze_lstm', methods=['POST'])
+def analyze_lstm():
+    text = request.form.get('analyze_text')
+    if not text or not model or not tokenizer or not label_encoder:
+        session['analysis_result'] = 'LSTM model not available or input kosong.'
+        return redirect(url_for('index'))
+    seq = tokenizer.texts_to_sequences([text])
+    padded = pad_sequences(seq, maxlen=100)
+    pred = model.predict(padded)
+    label = label_encoder.inverse_transform([np.argmax(pred)])[0]
+    session['analysis_result'] = f"Prediksi sentimen: <b>{label}</b>"
+    return redirect(url_for('index'))
 
 @app.route('/results/<filename>')
 def results_file(filename):
     return send_from_directory(RESULTS_FOLDER, filename)
 
-import os
-
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8080))  # Gunakan PORT dari Railway jika ada
-    app.run(host='0.0.0.0', port=port)
-
-
-
+    port = int(os.environ.get('PORT', 5000))
+    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))

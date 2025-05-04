@@ -16,6 +16,9 @@ UPLOAD_FOLDER = 'app/data/uploads'
 RESULTS_FOLDER = 'app/data/results'
 ALLOWED_EXTENSIONS = {'csv'}
 
+# Path file untuk komentar user
+USER_COMMENTS_PATH = 'user_comments.csv'
+
 app = Flask(__name__)
 app.secret_key = 'secret-key'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -53,17 +56,13 @@ def index():
         'wordcloud_netral': os.path.join(RESULTS_FOLDER, 'wordcloud_netral.png'),
         'wordcloud_positif': os.path.join(RESULTS_FOLDER, 'wordcloud_positif.png'),
     }
-    # Ambil komentar dari session
-    comments = session.get(COMMENTS_KEY, [])
-    # Ambil 20 komentar dari dataset CSV (beragam sentimen)
-    csv_comments = []
-    csv_path = os.path.join('dataset_tiktok_processed.csv')
-    if os.path.exists(csv_path):
+    # Baca komentar user dari file user_comments.csv
+    user_comments = []
+    if os.path.exists(USER_COMMENTS_PATH):
         try:
-            df = pd.read_csv(csv_path)
-            if 'komentar' in df.columns and 'sentiment' in df.columns:
-                # Ambil masing-masing sentimen
-                komentar_pos = df[df['sentiment'].str.lower() == 'positif'].sample(n=min(7, len(df[df['sentiment'].str.lower() == 'positif'])), random_state=1)
+            df = pd.read_csv(USER_COMMENTS_PATH)
+            if 'komentar' in df.columns and 'sentimen' in df.columns:
+                user_comments = [(row['komentar'], row['sentimen']) for _, row in df.iterrows()]
                 komentar_neg = df[df['sentiment'].str.lower() == 'negatif'].sample(n=min(7, len(df[df['sentiment'].str.lower() == 'negatif'])), random_state=2)
                 komentar_net = df[df['sentiment'].str.lower() == 'netral'].sample(n=min(6, len(df[df['sentiment'].str.lower() == 'netral'])), random_state=3)
                 gabung = pd.concat([komentar_pos, komentar_neg, komentar_net]).sample(frac=1, random_state=42) # acak urutan
@@ -73,10 +72,9 @@ def index():
                 csv_comments = [(row[0], row[1] if len(row) > 1 else '-') for row in df.values[:20]]
         except Exception as e:
             csv_comments = [(f'Gagal membaca CSV: {e}', '-')]
-    # Gabungkan komentar dari CSV lebih dulu, lalu komentar dari session (user) di bawahnya
-    all_comments = csv_comments + comments
+    # Kirim user_comments ke template
     analysis_result = session.pop('analysis_result', None)
-    return render_template('index.html', grafik_paths=grafik_paths, comments=all_comments, analysis_result=analysis_result)
+    return render_template('index.html', grafik_paths=grafik_paths, comments=user_comments, analysis_result=analysis_result)
 
 
 @app.route('/upload', methods=['POST'])
@@ -109,7 +107,6 @@ def upload():
 @app.route('/add_comment', methods=['POST'])
 def add_comment():
     comment = request.form.get('comment')
-    comments = session.get(COMMENTS_KEY, [])
     if comment:
         # Prediksi sentimen jika model tersedia
         sentimen = '-'
@@ -121,8 +118,15 @@ def add_comment():
                 sentimen = label_encoder.inverse_transform([np.argmax(pred)])[0]
             except Exception as e:
                 sentimen = f'error: {e}'
-        comments.append((comment, sentimen))
-        session[COMMENTS_KEY] = comments
+        # Simpan ke file user_comments.csv
+        import csv
+        user_comments_path = os.path.join('user_comments.csv')
+        file_exists = os.path.isfile(user_comments_path)
+        with open(user_comments_path, 'a', newline='', encoding='utf-8') as csvfile:
+            writer = csv.writer(csvfile)
+            if not file_exists:
+                writer.writerow(['komentar', 'sentimen'])
+            writer.writerow([comment, sentimen])
     return redirect(url_for('index'))
 
 
